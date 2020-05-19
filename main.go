@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/cli"
@@ -27,37 +28,6 @@ var (
 )
 
 var doRegions = []string{"ams1", "ams2", "ams3", "blr1", "fra1", "lon1", "nyc1", "nyc2", "nyc3", "sfo1", "sfo2", "sfo3", "sgp1", "tor1"}
-
-func doctlToken() (string, string, error) {
-	type doctlConfig struct {
-		Context      string            `yaml:"context"`
-		AccessToken  string            `yaml:"access-token"`
-		AuthContexts map[string]string `yaml:"auth-contexts"`
-	}
-
-	cfgDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", "", fmt.Errorf("couldn't look up user config dir: %w", err)
-	}
-
-	cfgFile, err := ioutil.ReadFile(filepath.Join(cfgDir, "doctl", "config.yaml"))
-	if err != nil {
-		return "", "", fmt.Errorf("couldn't read doctl's config.yaml: %w", err)
-	}
-
-	cfg := doctlConfig{}
-	err = yaml.Unmarshal(cfgFile, &cfg)
-	if err != nil {
-		return "", "", fmt.Errorf("couldn't unmarshal doctl's config.yaml: %w", err)
-	}
-
-	switch cfg.Context {
-	case "default":
-		return cfg.AccessToken, cfg.Context, nil
-	default:
-		return cfg.AuthContexts[cfg.Context], cfg.Context, nil
-	}
-}
 
 func main() {
 	kingpin.Parse()
@@ -142,6 +112,7 @@ func main() {
 	if *groupByRegion {
 		// loop over the doRegions slice to maintain alphabetic order
 		for _, region := range doRegions {
+			log.WithField("region", region).Info("building region group")
 			droplets := dropletsByRegion[region]
 
 			inventory.WriteString(fmt.Sprintf("[%s]", region))
@@ -158,6 +129,9 @@ func main() {
 	// write the tag groups
 	if *groupByTag {
 		for tag, droplets := range dropletsByTag {
+			tag = sanitizeAnsibleGroup(tag)
+			log.WithField("tag", tag).Info("building tag group")
+
 			inventory.WriteString(fmt.Sprintf("[%s]", tag))
 			inventory.WriteRune('\n')
 
@@ -187,6 +161,53 @@ func main() {
 	}
 
 	log.Info("done!")
+}
+
+func doctlToken() (string, string, error) {
+	type doctlConfig struct {
+		Context      string            `yaml:"context"`
+		AccessToken  string            `yaml:"access-token"`
+		AuthContexts map[string]string `yaml:"auth-contexts"`
+	}
+
+	cfgDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", "", fmt.Errorf("couldn't look up user config dir: %w", err)
+	}
+
+	cfgFile, err := ioutil.ReadFile(filepath.Join(cfgDir, "doctl", "config.yaml"))
+	if err != nil {
+		return "", "", fmt.Errorf("couldn't read doctl's config.yaml: %w", err)
+	}
+
+	cfg := doctlConfig{}
+	err = yaml.Unmarshal(cfgFile, &cfg)
+	if err != nil {
+		return "", "", fmt.Errorf("couldn't unmarshal doctl's config.yaml: %w", err)
+	}
+
+	switch cfg.Context {
+	case "default":
+		return cfg.AccessToken, cfg.Context, nil
+	default:
+		return cfg.AuthContexts[cfg.Context], cfg.Context, nil
+	}
+}
+
+func sanitizeAnsibleGroup(s string) string {
+	// replace invalid characters
+	s = strings.NewReplacer(
+		" ", "_",
+		"-", "_",
+		":", "_",
+	).Replace(s)
+
+	// group names cannot start with a digit
+	if '0' <= s[0] && s[0] <= '9' {
+		s = "_" + s
+	}
+
+	return s
 }
 
 func removeIgnored(droplets []godo.Droplet, ignored []string) []godo.Droplet {
