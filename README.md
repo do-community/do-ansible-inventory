@@ -4,7 +4,7 @@ do-ansible-inventory is a tool that generates an [Ansible inventory](https://doc
 
 ## Installation
 
-1. Download the latest release from [the releases page](https://github.com/kamaln7/do-ansible-inventory/releases).
+1. Download the latest release from [the releases page](https://github.com/do-community/do-ansible-inventory/releases).
 2. Extract the downloaded archive and place the binary `do-ansible-inventory` wherever you like. Preferably to any directory in your `$PATH` such as `~/bin` if it exists or `/usr/local/bin` so you can easily access it.
 
 ## Usage

@@ -1,4 +1,4 @@
-module github.com/kamaln7/do-ansible-inventory
+module github.com/do-community/do-ansible-inventory
 
 go 1.14
 
