@@ -1,4 +1,4 @@
-# 🗄 do-ansible-inventory
+# 📗 do-ansible-inventory
 
 do-ansible-inventory is a tool that generates an [Ansible inventory](https://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html) file with your DigitalOcean Droplets. It is an alternative to [dynamic inventories](https://docs.ansible.com/ansible/latest/user_guide/intro_dynamic_inventory.html#intro-dynamic-inventory) as you can run do-ansible-inventory once and receive a static inventory file that you can use anywhere, copy, or modify.
 
