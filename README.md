@@ -2,9 +2,14 @@
 
 do-ansible-inventory is a tool that generates an [Ansible inventory](https://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html) file with your DigitalOcean Droplets. It is an alternative to [dynamic inventories](https://docs.ansible.com/ansible/latest/user_guide/intro_dynamic_inventory.html#intro-dynamic-inventory) as you can run do-ansible-inventory once and receive a static inventory file that you can use anywhere, copy, or modify.
 
+## Installation
+
+1. Download the latest release from [the releases page](https://github.com/kamaln7/do-ansible-inventory/releases).
+2. Extract the downloaded archive and place the binary `do-ansible-inventory` wherever you like. Preferably to any directory in your `$PATH` such as `~/bin` if it exists or `/usr/local/bin` so you can easily access it.
+
 ## Usage
 
-[First, install do-ansible-inventory](#installation). Then, to use it, run:
+To use do-ansible-inventory, run:
 
 ```
 do-ansible-inventory
@@ -18,6 +23,8 @@ By default, without setting any options, do-ansible-inventory will attempt to lo
 
 If you do not have `doctl` installed or would like to explicitly specify the access token, run `do-ansible-inventory --access-token ACCESS_TOKEN` or use the `DIGITALOCEAN_ACCESS_TOKEN` environment variable.
 
+The resulting inventory will be printed to the console. You can save it to a file instead by passing `--out inventory` or redirecting the output like so: `do-ansible-inventory > inventory`.
+
 ### Supported Options
 
 * `-t TOKEN`, `--access-token TOKEN` - DigitalOcean API Token - if unset, do-ansible-inventory attempts to use doctl's stored token of its current default context. Alternatively, use the environment variable `DIGITALOCEAN_ACCESS_TOKEN`
@@ -28,11 +35,6 @@ If you do not have `doctl` installed or would like to explicitly specify the acc
 * `--group-by-region=TRUE/FALSE` - whether to create groups for each DigitalOcean region. Default: true
 * `--group-by-tag=TRUE/FALSE` - whether to create groups for each Droplet tag. Default: true
 * `--out FILE` - write the inventory to the specified file
-
-## Installation
-
-1. Download the latest release from [the releases page](https://github.com/kamaln7/do-ansible-inventory/releases).
-2. Extract the downloaded archive and place the binary `do-ansible-inventory` wherever you like. Preferably to any directory in your `$PATH` such as `~/bin` if it exists or `/usr/local/bin` so you can easily access it.
 
 ## Example
 
