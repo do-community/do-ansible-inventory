@@ -33,7 +33,7 @@ The resulting inventory will be printed to the console. You can save it to a fil
 * `--tag TAG` - limits the inventory to only Droplets with the specified tag
 * `--ignore HOSTNAME` - pass a Droplet's hostname to exclude it from the inventory. **This option can be used multiple times**
 * `--group-by-region` - create groups for each DigitalOcean region. Default behavior.
-* `--group-by-tag` - create grooups for each Droplet tag. Default behavior.
+* `--group-by-tag` - create groups for each Droplet tag. Default behavior.
 * `--no-group-by-region` - Do not create groups for each DigitalOcean region.
 * `--no-group-by-tag` - Do not create groups for each Droplet tag. 
 * `--out FILE` - write the inventory to the specified file
