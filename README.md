@@ -32,8 +32,10 @@ The resulting inventory will be printed to the console. You can save it to a fil
 * `--ssh-port PORT` - sets the `ansible_port` property on the hosts (Droplets)
 * `--tag TAG` - limits the inventory to only Droplets with the specified tag
 * `--ignore HOSTNAME` - pass a Droplet's hostname to exclude it from the inventory. **This option can be used multiple times**
-* `--group-by-region=TRUE/FALSE` - whether to create groups for each DigitalOcean region. Default: true
-* `--group-by-tag=TRUE/FALSE` - whether to create groups for each Droplet tag. Default: true
+* `--group-by-region` - create groups for each DigitalOcean region. Default behavior.
+* `--group-by-tag` - create grooups for each Droplet tag. Default behavior.
+* `--no-group-by-region` - Do not create groups for each DigitalOcean region.
+* `--no-group-by-tag` - Do not create groups for each Droplet tag. 
 * `--out FILE` - write the inventory to the specified file
 
 ## Example
