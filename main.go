@@ -37,7 +37,8 @@ var (
 	ignore        = kingpin.Flag("ignore", "ignore a Droplet by name, can be specified multiple times").Strings()
 	groupByRegion = kingpin.Flag("group-by-region", "group hosts by region, defaults to true").Default("true").Bool()
 	groupByTag    = kingpin.Flag("group-by-tag", "group hosts by their Droplet tags, defaults to true").Default("true").Bool()
-	out           = kingpin.Flag("out", "write the ansible inventory to this file").String()
+	out           = kingpin.Flag("out", "write the ansible inventory to this file - if unset, print to stdout").String()
+	privateIPs    = kingpin.Flag("private-ips", "use private Droplet IPs instead of public IPs").Bool()
 )
 
 var doRegions = []string{"ams1", "ams2", "ams3", "blr1", "fra1", "lon1", "nyc1", "nyc2", "nyc3", "sfo1", "sfo2", "sfo3", "sgp1", "tor1"}
@@ -90,7 +91,8 @@ func main() {
 	var inventory bytes.Buffer
 
 	for _, d := range droplets {
-		log.WithField("droplet", d.Name).Info("processing")
+		ll := log.WithField("droplet", d.Name)
+		ll.Info("processing")
 		if *groupByRegion {
 			r := d.Region.Slug
 			dropletsByRegion[r] = append(dropletsByRegion[r], d.Name)
@@ -102,9 +104,17 @@ func main() {
 			}
 		}
 
-		ip, err := d.PublicIPv4()
+		var (
+			ip  string
+			err error
+		)
+		if *privateIPs {
+			ip, err = d.PrivateIPv4()
+		} else {
+			ip, err = d.PublicIPv4()
+		}
 		if err != nil {
-			log.WithError(err).WithField("droplet", d.Name).Error("couldn't look up the Droplet's IP address, skipped")
+			ll.WithError(err).Error("couldn't look up the Droplet's IP address, skipped")
 			continue
 		}
 
@@ -116,7 +126,11 @@ func main() {
 		if *sshPort != 0 {
 			inventory.WriteString(fmt.Sprintf("ansible_port=%d ", *sshPort))
 		}
-		inventory.WriteString(fmt.Sprintf("ansible_host=%s", ip))
+		if ip != "" {
+			inventory.WriteString(fmt.Sprintf("ansible_host=%s", ip))
+		} else {
+			ll.Warn("could not get the Droplet's IP address, using hostname")
+		}
 		inventory.WriteRune('\n')
 	}
 	inventory.WriteRune('\n')

@@ -36,7 +36,8 @@ The resulting inventory will be printed to the console. You can save it to a fil
 * `--group-by-tag` - create groups for each Droplet tag. Default behavior.
 * `--no-group-by-region` - Do not create groups for each DigitalOcean region.
 * `--no-group-by-tag` - Do not create groups for each Droplet tag. 
-* `--out FILE` - write the inventory to the specified file
+* `--out FILE` - write the ansible inventory to this file - if unset, print to stdout
+* `--private-ips` - use private Droplet IPs instead of public IPs
 
 ## Example
 
@@ -166,5 +167,6 @@ Flags:
       --ignore=IGNORE ...  ignore a Droplet by name, can be specified multiple times
       --group-by-region    group hosts by region, defaults to true
       --group-by-tag       group hosts by their Droplet tags, defaults to true
-      --out=OUT            write the ansible inventory to this file
+      --out=OUT            write the ansible inventory to this file - if unset, print to stdout
+      --private-ips        use private Droplet IPs instead of public IPs
 ```
