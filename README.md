@@ -33,11 +33,14 @@ The resulting inventory will be printed to the console. You can save it to a fil
 * `--tag TAG` - limits the inventory to only Droplets with the specified tag
 * `--ignore HOSTNAME` - pass a Droplet's hostname to exclude it from the inventory. **This option can be used multiple times**
 * `--group-by-region` - create groups for each DigitalOcean region. Default behavior.
+   * `--no-group-by-region` - do not create groups for each DigitalOcean region.
 * `--group-by-tag` - create groups for each Droplet tag. Default behavior.
-* `--no-group-by-region` - Do not create groups for each DigitalOcean region.
-* `--no-group-by-tag` - Do not create groups for each Droplet tag. 
-* `--out FILE` - write the ansible inventory to this file - if unset, print to stdout
+   * `--no-group-by-tag` - do not create groups for each Droplet tag. 
+* `--group-by-project` - create groups for each Droplet projects. Default behavior.
+   * `--no-group-by-project` - do not create groups for each Droplet project. 
 * `--private-ips` - use private Droplet IPs instead of public IPs
+* `--out FILE` - write the ansible inventory to this file - if unset, print to stdout
+* `--timeout=2m` - timeout for total runtime of the command, defaults to `2m`
 
 ## Example
 
@@ -167,6 +170,8 @@ Flags:
       --ignore=IGNORE ...  ignore a Droplet by name, can be specified multiple times
       --group-by-region    group hosts by region, defaults to true
       --group-by-tag       group hosts by their Droplet tags, defaults to true
-      --out=OUT            write the ansible inventory to this file - if unset, print to stdout
+      --group-by-project   group hosts by their Projects, defaults to true
       --private-ips        use private Droplet IPs instead of public IPs
+      --out=OUT            write the ansible inventory to this file - if unset, print to stdout
+      --timeout=2m         timeout for total runtime of the command, defaults to 2m
 ```

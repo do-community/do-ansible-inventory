@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/apex/log"
@@ -30,15 +31,17 @@ import (
 )
 
 var (
-	doToken       = kingpin.Flag("access-token", "DigitalOcean API Token - if unset, attempts to use doctl's stored token of its current default context. env var: DIGITALOCEAN_ACCESS_TOKEN").Short('t').Envar("DIGITALOCEAN_ACCESS_TOKEN").String()
-	sshUser       = kingpin.Flag("ssh-user", "default ssh user").String()
-	sshPort       = kingpin.Flag("ssh-port", "default ssh port").Int()
-	tag           = kingpin.Flag("tag", "filter droplets by tag").String()
-	ignore        = kingpin.Flag("ignore", "ignore a Droplet by name, can be specified multiple times").Strings()
-	groupByRegion = kingpin.Flag("group-by-region", "group hosts by region, defaults to true").Default("true").Bool()
-	groupByTag    = kingpin.Flag("group-by-tag", "group hosts by their Droplet tags, defaults to true").Default("true").Bool()
-	out           = kingpin.Flag("out", "write the ansible inventory to this file - if unset, print to stdout").String()
-	privateIPs    = kingpin.Flag("private-ips", "use private Droplet IPs instead of public IPs").Bool()
+	doToken        = kingpin.Flag("access-token", "DigitalOcean API Token - if unset, attempts to use doctl's stored token of its current default context. env var: DIGITALOCEAN_ACCESS_TOKEN").Short('t').Envar("DIGITALOCEAN_ACCESS_TOKEN").String()
+	sshUser        = kingpin.Flag("ssh-user", "default ssh user").String()
+	sshPort        = kingpin.Flag("ssh-port", "default ssh port").Int()
+	tag            = kingpin.Flag("tag", "filter droplets by tag").String()
+	ignore         = kingpin.Flag("ignore", "ignore a Droplet by name, can be specified multiple times").Strings()
+	groupByRegion  = kingpin.Flag("group-by-region", "group hosts by region, defaults to true").Default("true").Bool()
+	groupByTag     = kingpin.Flag("group-by-tag", "group hosts by their Droplet tags, defaults to true").Default("true").Bool()
+	groupByProject = kingpin.Flag("group-by-project", "group hosts by their Projects, defaults to true").Default("true").Bool()
+	privateIPs     = kingpin.Flag("private-ips", "use private Droplet IPs instead of public IPs").Bool()
+	out            = kingpin.Flag("out", "write the ansible inventory to this file - if unset, print to stdout").String()
+	timeout        = kingpin.Flag("timeout", "timeout for total runtime of the command, defaults to 2m").Default("2m").Duration()
 )
 
 var doRegions = []string{"ams1", "ams2", "ams3", "blr1", "fra1", "lon1", "nyc1", "nyc2", "nyc3", "sfo1", "sfo2", "sfo3", "sgp1", "tor1"}
@@ -58,7 +61,8 @@ func main() {
 		log.WithField("context", context).Info("using doctl access token")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
 	client := godo.NewFromToken(*doToken)
 
 	// get droplets
@@ -66,7 +70,8 @@ func main() {
 		log.WithField("tag", *tag).Info("only selecting tagged Droplets")
 	}
 
-	droplets, err := dropletList(ctx, client, *tag)
+	log.Info("listing Droplets")
+	droplets, err := listDroplets(ctx, client, *tag)
 	if err != nil {
 		log.WithError(err).Fatal("couldn't fetch Droplets")
 	}
@@ -89,10 +94,14 @@ func main() {
 	}
 
 	var inventory bytes.Buffer
+	dropletsByID := make(map[int]string, len(droplets))
 
 	for _, d := range droplets {
 		ll := log.WithField("droplet", d.Name)
 		ll.Info("processing")
+
+		dropletsByID[d.ID] = d.Name
+
 		if *groupByRegion {
 			r := d.Region.Slug
 			dropletsByRegion[r] = append(dropletsByRegion[r], d.Name)
@@ -160,6 +169,61 @@ func main() {
 			log.WithField("tag", tag).Info("building tag group")
 
 			inventory.WriteString(fmt.Sprintf("[%s]", tag))
+			inventory.WriteRune('\n')
+
+			for _, d := range droplets {
+				inventory.WriteString(d)
+				inventory.WriteRune('\n')
+			}
+			inventory.WriteRune('\n')
+		}
+	}
+
+	// write the project groups
+	if *groupByProject {
+		log.Info("listing projects")
+		projects, _, err := client.Projects.List(ctx, nil)
+		if err != nil {
+			log.WithError(err).Fatal("couldn't list projects")
+		}
+
+		dropletsByProject := make(map[string][]string)
+		for _, project := range projects {
+			ll := log.WithField("project", project.Name)
+			ll.Info("listing project resources")
+
+			resources, err := listProjectResources(ctx, client, project.ID)
+			if err != nil {
+				ll.WithError(err).Fatal("")
+			}
+
+			for _, r := range resources {
+				if !strings.HasPrefix(r.URN, "do:droplet:") {
+					continue
+				}
+
+				id := strings.TrimPrefix(r.URN, "do:droplet:")
+				idInt, err := strconv.Atoi(id)
+				if err != nil {
+					ll.WithError(err).WithField("urn", r.URN).Error("parsing droplet ID, skipping")
+					continue
+				}
+
+				// skip droplets that aren't included in the inventory
+				droplet, exists := dropletsByID[idInt]
+				if !exists {
+					continue
+				}
+
+				dropletsByProject[project.Name] = append(dropletsByProject[project.Name], droplet)
+			}
+		}
+
+		for project, droplets := range dropletsByProject {
+			project = sanitizeAnsibleGroup(project)
+			log.WithField("project", project).Info("building project group")
+
+			inventory.WriteString(fmt.Sprintf("[%s]", project))
 			inventory.WriteRune('\n')
 
 			for _, d := range droplets {
@@ -263,31 +327,69 @@ func removeIgnored(droplets []godo.Droplet, ignored []string) []godo.Droplet {
 }
 
 // get droplets w/ pagination
-func dropletList(ctx context.Context, client *godo.Client, tag string) ([]godo.Droplet, error) {
-	// create a list to hold our droplets
-	list := []godo.Droplet{}
+func listDroplets(ctx context.Context, client *godo.Client, tag string) ([]godo.Droplet, error) {
+	droplets := []godo.Droplet{}
 
+	call := func(opt *godo.ListOptions) (interface{}, *godo.Response, error) {
+		if tag != "" {
+			return client.Droplets.ListByTag(ctx, tag, opt)
+		}
+
+		return client.Droplets.List(ctx, opt)
+	}
+	handler := func(d interface{}) error {
+		dd, ok := d.([]godo.Droplet)
+		if !ok {
+			return fmt.Errorf("listing Droplets")
+		}
+		droplets = append(droplets, dd...)
+		return nil
+	}
+
+	err := paginateGodo(ctx, call, handler)
+	if err != nil {
+		return nil, err
+	}
+
+	return droplets, nil
+}
+
+// get project resources w/ pagination
+func listProjectResources(ctx context.Context, client *godo.Client, projectID string) ([]godo.ProjectResource, error) {
+	prs := []godo.ProjectResource{}
+
+	call := func(opt *godo.ListOptions) (interface{}, *godo.Response, error) {
+		return client.Projects.ListResources(ctx, projectID, opt)
+	}
+	handler := func(r interface{}) error {
+		rr, ok := r.([]godo.ProjectResource)
+		if !ok {
+			return fmt.Errorf("listing project resources")
+		}
+		prs = append(prs, rr...)
+		return nil
+	}
+
+	err := paginateGodo(ctx, call, handler)
+	if err != nil {
+		return nil, err
+	}
+
+	return prs, nil
+}
+
+func paginateGodo(ctx context.Context, call func(*godo.ListOptions) (interface{}, *godo.Response, error), handler func(interface{}) error) error {
 	// create options. initially, these will be blank
 	opt := &godo.ListOptions{}
 	for {
-		var (
-			droplets []godo.Droplet
-			resp     *godo.Response
-			err      error
-		)
-		if tag != "" {
-			droplets, resp, err = client.Droplets.ListByTag(ctx, tag, opt)
-		} else {
-			droplets, resp, err = client.Droplets.List(ctx, opt)
-		}
-
+		results, resp, err := call(opt)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		// append the current page's droplets to our list
-		for _, d := range droplets {
-			list = append(list, d)
+		err = handler(results)
+		if err != nil {
+			return nil
 		}
 
 		// if we are at the last page, break out the for loop
@@ -297,12 +399,12 @@ func dropletList(ctx context.Context, client *godo.Client, tag string) ([]godo.D
 
 		page, err := resp.Links.CurrentPage()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// set the page we want for the next request
 		opt.Page = page + 1
 	}
 
-	return list, nil
+	return nil
 }
